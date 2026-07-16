@@ -1,8 +1,11 @@
 import json
 import os
 import sys
+import urllib.parse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 
 def _json_response(handler, data, status=200):
@@ -37,4 +40,5 @@ class handler:
             else:
                 _json_response(self, {'sources': list(ADAPTER_REGISTRY.keys())})
         except Exception as e:
-            _json_response(self, {'error': str(e)}, 400)
+            import traceback
+            _json_response(self, {'error': str(e), 'trace': traceback.format_exc()}, 400)

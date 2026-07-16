@@ -3,8 +3,21 @@
   "outputDirectory": ".next",
   "framework": "nextjs",
   "installCommand": "npm install",
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/$1" }
-  ]
+  "functions": {
+    "api/backtest.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/parse.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/chat.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/indicators.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/data.py": {
+      "includeFiles": "backend/**"
+    }
+  }
 }

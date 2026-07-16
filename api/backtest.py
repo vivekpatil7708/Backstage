@@ -2,14 +2,17 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Add project root to path so we can import from backend/
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 
 def _json_response(handler, data, status=200):
     handler.send_response(status)
     handler.send_header('Content-Type', 'application/json')
     handler.send_header('Access-Control-Allow-Origin', '*')
-    handler.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    handler.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
     handler.send_header('Access-Control-Allow-Headers', 'Content-Type')
     handler.end_headers()
     handler.wfile.write(json.dumps(data, default=str).encode())
@@ -19,8 +22,7 @@ def _read_body(handler):
     length = int(handler.headers.get('Content-Length', 0))
     if length == 0:
         return {}
-    body = handler.rfile.read(length)
-    return json.loads(body)
+    return json.loads(handler.rfile.read(length))
 
 
 class handler:
@@ -55,4 +57,5 @@ class handler:
                 'result': result.model_dump(),
             })
         except Exception as e:
-            _json_response(self, {'error': str(e)}, 400)
+            import traceback
+            _json_response(self, {'error': str(e), 'trace': traceback.format_exc()}, 400)
