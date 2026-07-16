@@ -2,5 +2,22 @@
   "buildCommand": "next build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "functions": {
+    "api/backtest.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/parse.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/chat.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/indicators.py": {
+      "includeFiles": "backend/**"
+    },
+    "api/data.py": {
+      "includeFiles": "backend/**"
+    }
+  }
 }

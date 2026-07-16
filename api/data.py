@@ -3,33 +3,36 @@ import os
 import sys
 import traceback
 
-_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _root not in sys.path:
-    sys.path.insert(0, _root)
 
-from flask import Flask, request, jsonify
+def handler(environ, start_response):
+    method = environ.get('REQUEST_METHOD', 'GET')
+    headers = [('Content-Type', 'application/json'), ('Access-Control-Allow-Origin', '*')]
 
-app = Flask(__name__)
-
-
-@app.route('/api/data', methods=['GET', 'OPTIONS'])
-def data():
-    if request.method == 'OPTIONS':
-        return '', 200
+    if method == 'OPTIONS':
+        start_response('204 No Content', headers)
+        return [b'']
 
     try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+
         from backend.app.data.registry import ADAPTER_REGISTRY, get_adapter
 
-        source = request.args.get('source', '')
+        query = urllib.parse.unquote(environ.get('QUERY_STRING', ''))
+        params = dict(p.split('=') for p in query.split('&') if '=' in p)
+        source = params.get('source', '')
 
         if source:
             adapter = get_adapter(source)
-            return jsonify({'instruments': adapter.list_instruments()})
+            resp = json.dumps({'instruments': adapter.list_instruments()})
         else:
-            return jsonify({'sources': list(ADAPTER_REGISTRY.keys())})
+            resp = json.dumps({'sources': list(ADAPTER_REGISTRY.keys())})
+
+        start_response('200 OK', headers)
+        return [resp.encode()]
 
     except Exception as e:
-        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 400
-
-
-handler = app
+        resp = json.dumps({'error': str(e), 'trace': traceback.format_exc()})
+        start_response('400 Bad Request', headers)
+        return [resp.encode()]
