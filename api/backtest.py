@@ -7,33 +7,22 @@ _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
+from flask import Flask, request, jsonify
 
-def handler(environ, start_response):
-    method = environ.get('REQUEST_METHOD', 'GET')
-    path = environ.get('PATH_INFO', '/')
+app = Flask(__name__)
 
-    headers = [('Content-Type', 'application/json'), ('Access-Control-Allow-Origin', '*')]
 
-    if method == 'OPTIONS':
-        start_response('200 OK', headers + [
-            ('Access-Control-Allow-Methods', 'POST, OPTIONS'),
-            ('Access-Control-Allow-Headers', 'Content-Type'),
-        ])
-        return [b'']
-
-    if method != 'POST':
-        start_response('405 Method Not Allowed', headers)
-        return [json.dumps({'error': 'Method not allowed'}).encode()]
+@app.route('/api/backtest', methods=['POST', 'OPTIONS'])
+def run_backtest():
+    if request.method == 'OPTIONS':
+        return '', 200
 
     try:
-        length = int(environ.get('CONTENT_LENGTH', 0) or 0)
-        body = environ['wsgi.input'].read(length)
-        data = json.loads(body) if body else {}
-
         from backend.app.core.engine.backtest import BacktestEngine
         from backend.app.core.models.strategy import StrategyDefinition
         from backend.app.data.registry import get_adapter
 
+        data = request.get_json(force=True)
         strategy_def = StrategyDefinition(**data.get('strategy', {}))
         data_source = data.get('data_source', 'synthetic')
         instrument = data.get('instrument', 'NIFTY')
@@ -46,11 +35,10 @@ def handler(environ, start_response):
         engine = BacktestEngine(strategy_def, df)
         result = engine.run()
 
-        resp = json.dumps({'run_id': 0, 'result': result.model_dump()}, default=str).encode()
-        start_response('200 OK', headers)
-        return [resp]
+        return jsonify({'run_id': 0, 'result': result.model_dump()})
 
     except Exception as e:
-        resp = json.dumps({'error': str(e), 'trace': traceback.format_exc()}).encode()
-        start_response('400 Bad Request', headers)
-        return [resp]
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 400
+
+
+handler = app
