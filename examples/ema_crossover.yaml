@@ -1,0 +1,26 @@
+name: EMA Crossover (RELIANCE)
+description: Buy RELIANCE when 9 EMA crosses above 21 EMA. Sell on reverse crossover.
+timeframe: 1d
+initial_capital: 100000.0
+entry_rules:
+  - instrument: RELIANCE
+    instrument_type: equity
+    side: buy
+    conditions:
+      - indicator: ema
+        operator: cross_above
+        value: 0
+        period: 9
+exit_rules:
+  - conditions:
+      - indicator: ema
+        operator: cross_below
+        value: 0
+        period: 9
+risk_management:
+  stop_loss_percent: 3.0
+  take_profit_percent: 6.0
+  max_positions: 1
+position_sizing:
+  sizing_type: percent_capital
+  percent_capital: 25.0

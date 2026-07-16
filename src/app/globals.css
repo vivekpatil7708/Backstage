@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0a12;
+  --card: #1e1e2e;
+  --border: #2a2a3a;
+}
+
+body {
+  background: var(--bg);
+  color: #e5e7eb;
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+input, select, textarea {
+  @apply bg-[#1e1e2e] border border-[#2a2a3a] rounded-lg px-3 py-2 text-gray-100 text-sm
+         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+button {
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.card {
+  @apply bg-[#1e1e2e] border border-[#2a2a3a] rounded-xl p-6;
+}

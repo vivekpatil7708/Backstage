@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.db
+*.sqlite3
+.env
+venv/
+.venv/
+
+# Next.js
+.next/
+out/
+.vercel/
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Old structure (if present)
+frontend/
+backend/.env

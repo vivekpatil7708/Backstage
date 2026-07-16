@@ -1,0 +1,34 @@
+name: RSI Mean Reversion (NIFTY)
+description: Buy NIFTY when oversold (RSI < 30), sell when overbought (RSI > 70). Intraday only.
+timeframe: 1d
+start_date: "2023-01-01"
+end_date: "2024-06-30"
+initial_capital: 100000.0
+entry_rules:
+  - instrument: NIFTY
+    instrument_type: index
+    side: buy
+    conditions:
+      - indicator: rsi
+        operator: "<"
+        value: 30
+        period: 14
+exit_rules:
+  - conditions:
+      - indicator: rsi
+        operator: ">"
+        value: 70
+        period: 14
+  - exit_at_end_of_day: true
+risk_management:
+  stop_loss_percent: 2.0
+  take_profit_percent: 4.0
+  max_positions: 1
+position_sizing:
+  sizing_type: fixed_capital
+  capital_per_trade: 50000.0
+transaction_costs:
+  brokerage_per_order: 20.0
+  stt_percent: 0.05
+  slippage_ticks: 1
+  slippage_value: 0.05
