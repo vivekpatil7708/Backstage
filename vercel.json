@@ -1,22 +1,26 @@
 {
-  "buildCommand": "next build",
-  "outputDirectory": ".next",
-  "framework": "nextjs",
-  "installCommand": "npm install",
   "functions": {
+    "api/hello.py": {
+      "runtime": "@vercel/python"
+    },
     "api/backtest.py": {
+      "runtime": "@vercel/python",
       "includeFiles": "backend/**"
     },
     "api/parse.py": {
+      "runtime": "@vercel/python",
       "includeFiles": "backend/**"
     },
     "api/chat.py": {
+      "runtime": "@vercel/python",
       "includeFiles": "backend/**"
     },
     "api/indicators.py": {
+      "runtime": "@vercel/python",
       "includeFiles": "backend/**"
     },
     "api/data.py": {
+      "runtime": "@vercel/python",
       "includeFiles": "backend/**"
     }
   }

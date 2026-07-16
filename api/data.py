@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import traceback
+import urllib.parse
 
 
 def handler(environ, start_response):
