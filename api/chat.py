@@ -1,49 +1,46 @@
 import json
 import os
 import sys
+import traceback
 
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
 
-def _json_response(handler, data, status=200):
-    handler.send_response(status)
-    handler.send_header('Content-Type', 'application/json')
-    handler.send_header('Access-Control-Allow-Origin', '*')
-    handler.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-    handler.send_header('Access-Control-Allow-Headers', 'Content-Type')
-    handler.end_headers()
-    handler.wfile.write(json.dumps(data, default=str).encode())
+def handler(environ, start_response):
+    method = environ.get('REQUEST_METHOD', 'GET')
+    headers = [('Content-Type', 'application/json'), ('Access-Control-Allow-Origin', '*')]
 
+    if method == 'OPTIONS':
+        start_response('200 OK', headers + [
+            ('Access-Control-Allow-Methods', 'POST, OPTIONS'),
+            ('Access-Control-Allow-Headers', 'Content-Type'),
+        ])
+        return [b'']
 
-def _read_body(handler):
-    length = int(handler.headers.get('Content-Length', 0))
-    if length == 0:
-        return {}
-    return json.loads(handler.rfile.read(length))
+    if method != 'POST':
+        start_response('405 Method Not Allowed', headers)
+        return [json.dumps({'error': 'Method not allowed'}).encode()]
 
+    try:
+        length = int(environ.get('CONTENT_LENGTH', 0) or 0)
+        body = environ['wsgi.input'].read(length)
+        data = json.loads(body) if body else {}
 
-class handler:
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+        from backend.app.services.chatbot import strategy_coach
 
-    def do_POST(self):
-        try:
-            from backend.app.services.chatbot import strategy_coach
+        message = data.get('message', '')
+        history = data.get('history', [])
 
-            body = _read_body(self)
-            message = body.get('message', '')
-            history = body.get('history', [])
+        import asyncio
+        response = asyncio.run(strategy_coach.chat(message, history))
 
-            import asyncio
-            response = asyncio.run(strategy_coach.chat(message, history))
+        resp = json.dumps({'response': response}).encode()
+        start_response('200 OK', headers)
+        return [resp]
 
-            _json_response(self, {'response': response})
-        except Exception as e:
-            import traceback
-            _json_response(self, {'error': str(e), 'trace': traceback.format_exc()}, 400)
+    except Exception as e:
+        resp = json.dumps({'error': str(e), 'trace': traceback.format_exc()}).encode()
+        start_response('400 Bad Request', headers)
+        return [resp]

@@ -1,34 +1,35 @@
 import json
 import os
 import sys
+import traceback
 
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
 
-def _json_response(handler, data, status=200):
-    handler.send_response(status)
-    handler.send_header('Content-Type', 'application/json')
-    handler.send_header('Access-Control-Allow-Origin', '*')
-    handler.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-    handler.send_header('Access-Control-Allow-Headers', 'Content-Type')
-    handler.end_headers()
-    handler.wfile.write(json.dumps(data).encode())
+def handler(environ, start_response):
+    method = environ.get('REQUEST_METHOD', 'GET')
+    headers = [('Content-Type', 'application/json'), ('Access-Control-Allow-Origin', '*')]
 
+    if method == 'OPTIONS':
+        start_response('200 OK', headers + [
+            ('Access-Control-Allow-Methods', 'GET, OPTIONS'),
+            ('Access-Control-Allow-Headers', 'Content-Type'),
+        ])
+        return [b'']
 
-class handler:
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+    if method != 'GET':
+        start_response('405 Method Not Allowed', headers)
+        return [json.dumps({'error': 'Method not allowed'}).encode()]
 
-    def do_GET(self):
-        try:
-            from backend.app.core.indicators.technical import INDICATOR_REGISTRY
-            _json_response(self, {'indicators': list(INDICATOR_REGISTRY.keys())})
-        except Exception as e:
-            import traceback
-            _json_response(self, {'error': str(e), 'trace': traceback.format_exc()}, 400)
+    try:
+        from backend.app.core.indicators.technical import INDICATOR_REGISTRY
+        resp = json.dumps({'indicators': list(INDICATOR_REGISTRY.keys())}).encode()
+        start_response('200 OK', headers)
+        return [resp]
+
+    except Exception as e:
+        resp = json.dumps({'error': str(e), 'trace': traceback.format_exc()}).encode()
+        start_response('400 Bad Request', headers)
+        return [resp]

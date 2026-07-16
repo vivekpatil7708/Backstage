@@ -1,61 +1,56 @@
 import json
 import os
 import sys
+import traceback
 
-# Add project root to path so we can import from backend/
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
 
-def _json_response(handler, data, status=200):
-    handler.send_response(status)
-    handler.send_header('Content-Type', 'application/json')
-    handler.send_header('Access-Control-Allow-Origin', '*')
-    handler.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-    handler.send_header('Access-Control-Allow-Headers', 'Content-Type')
-    handler.end_headers()
-    handler.wfile.write(json.dumps(data, default=str).encode())
+def handler(environ, start_response):
+    method = environ.get('REQUEST_METHOD', 'GET')
+    path = environ.get('PATH_INFO', '/')
 
+    headers = [('Content-Type', 'application/json'), ('Access-Control-Allow-Origin', '*')]
 
-def _read_body(handler):
-    length = int(handler.headers.get('Content-Length', 0))
-    if length == 0:
-        return {}
-    return json.loads(handler.rfile.read(length))
+    if method == 'OPTIONS':
+        start_response('200 OK', headers + [
+            ('Access-Control-Allow-Methods', 'POST, OPTIONS'),
+            ('Access-Control-Allow-Headers', 'Content-Type'),
+        ])
+        return [b'']
 
+    if method != 'POST':
+        start_response('405 Method Not Allowed', headers)
+        return [json.dumps({'error': 'Method not allowed'}).encode()]
 
-class handler:
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+    try:
+        length = int(environ.get('CONTENT_LENGTH', 0) or 0)
+        body = environ['wsgi.input'].read(length)
+        data = json.loads(body) if body else {}
 
-    def do_POST(self):
-        try:
-            from backend.app.core.engine.backtest import BacktestEngine
-            from backend.app.core.models.strategy import StrategyDefinition
-            from backend.app.data.registry import get_adapter
+        from backend.app.core.engine.backtest import BacktestEngine
+        from backend.app.core.models.strategy import StrategyDefinition
+        from backend.app.data.registry import get_adapter
 
-            body = _read_body(self)
-            strategy_def = StrategyDefinition(**body.get('strategy', {}))
-            data_source = body.get('data_source', 'synthetic')
-            instrument = body.get('instrument', 'NIFTY')
-            start_date = body.get('start_date', '2023-01-01')
-            end_date = body.get('end_date', '2024-12-31')
+        strategy_def = StrategyDefinition(**data.get('strategy', {}))
+        data_source = data.get('data_source', 'synthetic')
+        instrument = data.get('instrument', 'NIFTY')
+        start_date = data.get('start_date', '2023-01-01')
+        end_date = data.get('end_date', '2024-12-31')
 
-            adapter = get_adapter(data_source)
-            data = adapter.load(instrument, start_date, end_date, strategy_def.timeframe.value)
+        adapter = get_adapter(data_source)
+        df = adapter.load(instrument, start_date, end_date, strategy_def.timeframe.value)
 
-            engine = BacktestEngine(strategy_def, data)
-            result = engine.run()
+        engine = BacktestEngine(strategy_def, df)
+        result = engine.run()
 
-            _json_response(self, {
-                'run_id': 0,
-                'result': result.model_dump(),
-            })
-        except Exception as e:
-            import traceback
-            _json_response(self, {'error': str(e), 'trace': traceback.format_exc()}, 400)
+        resp = json.dumps({'run_id': 0, 'result': result.model_dump()}, default=str).encode()
+        start_response('200 OK', headers)
+        return [resp]
+
+    except Exception as e:
+        resp = json.dumps({'error': str(e), 'trace': traceback.format_exc()}).encode()
+        start_response('400 Bad Request', headers)
+        return [resp]
