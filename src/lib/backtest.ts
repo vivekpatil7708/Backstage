@@ -360,6 +360,7 @@ function computeResults(
 
   return {
     strategy_name: s.name,
+    timeframe: s.timeframe || "1d",
     start_date: bars[0].datetime.split("T")[0],
     end_date: bars[bars.length - 1].datetime.split("T")[0],
     initial_capital: initialCapital,

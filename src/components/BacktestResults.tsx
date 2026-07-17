@@ -67,8 +67,13 @@ export default function BacktestResults({ result, bars = [], markers = [] }: Pro
 
       {bars.length > 0 && (
         <div className="card">
-          <h3 className="text-sm font-medium text-gray-400 mb-4">Price Chart with Trade Markers</h3>
-          <PriceChart bars={bars} markers={markers} />
+          <h3 className="text-sm font-medium text-gray-400 mb-4">Price Chart</h3>
+          <PriceChart
+            bars={bars}
+            markers={markers}
+            instrument={result.trades[0]?.entry_order?.instrument || 'NIFTY'}
+            timeframe={result.timeframe || '1d'}
+          />
         </div>
       )}
 

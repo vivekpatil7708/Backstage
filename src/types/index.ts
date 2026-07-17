@@ -86,6 +86,7 @@ export interface Trade {
 
 export interface BacktestResult {
   strategy_name: string
+  timeframe: string
   start_date: string
   end_date: string
   initial_capital: number
