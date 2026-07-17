@@ -30,3 +30,6 @@ Thumbs.db
 # Old structure (if present)
 frontend/
 backend/.env
+
+.vercel
+.env*
