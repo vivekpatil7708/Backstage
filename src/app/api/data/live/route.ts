@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { fetchYahooData } from "@/lib/data"
 
+export const dynamic = "force-dynamic"
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -12,7 +14,9 @@ export async function GET(request: NextRequest) {
     const start = new Date()
 
     switch (range) {
-      case "1d": start.setDate(end.getDate() - 1); break
+      case "1d":
+        start.setDate(end.getDate() - (timeframe === "1d" ? 30 : 1))
+        break
       case "5d": start.setDate(end.getDate() - 5); break
       case "1mo": start.setMonth(end.getMonth() - 1); break
       case "3mo": start.setMonth(end.getMonth() - 3); break

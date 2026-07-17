@@ -8,9 +8,10 @@ import {
   LineSeries,
   HistogramSeries,
   type IChartApi,
-  type ISeriesApi,
   type Time,
   type SeriesMarker,
+  type CandlestickData,
+  type HistogramData,
 } from 'lightweight-charts'
 
 interface Bar {
@@ -39,6 +40,8 @@ interface Props {
 
 const REFRESH_OPTIONS = [
   { value: '0', label: 'Off' },
+  { value: '1', label: '1s' },
+  { value: '5', label: '5s' },
   { value: '15', label: '15s' },
   { value: '30', label: '30s' },
   { value: '60', label: '1m' },
@@ -46,6 +49,8 @@ const REFRESH_OPTIONS = [
 ]
 
 const RANGE_OPTIONS = [
+  { value: '1d', label: '1D' },
+  { value: '5d', label: '5D' },
   { value: '1mo', label: '1M' },
   { value: '3mo', label: '3M' },
   { value: '6mo', label: '6M' },
@@ -58,21 +63,51 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
   const chartRef = useRef<IChartApi | null>(null)
   const candleSeriesRef = useRef<any>(null)
   const volumeSeriesRef = useRef<any>(null)
+  const indicatorSeriesRef = useRef<any>(null)
+  const isInitialMount = useRef(true)
+  const isLiveUpdate = useRef(false)
 
-  const [bars, setBars] = useState(initialBars)
-  const [markers, setMarkers] = useState(initialMarkers)
   const [showVolume, setShowVolume] = useState(true)
   const [selectedIndicator, setSelectedIndicator] = useState<string>('none')
   const [indicatorPeriod, setIndicatorPeriod] = useState(14)
 
   const [liveMode, setLiveMode] = useState(false)
-  const [liveRange, setLiveRange] = useState('1mo')
-  const [refreshInterval, setRefreshInterval] = useState('30')
+  const [liveRange, setLiveRange] = useState('1d')
+  const [refreshInterval, setRefreshInterval] = useState('1')
   const [lastUpdate, setLastUpdate] = useState<string>('')
   const [lastPrice, setLastPrice] = useState<number | null>(null)
   const [prevPrice, setPrevPrice] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const barsDataRef = useRef(initialBars)
+
+  const saveVisibleRange = useCallback(() => {
+    const chart = chartRef.current
+    if (!chart) return null
+    return chart.timeScale().getVisibleRange() as { from: Time; to: Time } | null
+  }, [])
+
+  const restoreVisibleRange = useCallback((range: { from: Time; to: Time } | null) => {
+    if (!range) return
+    const chart = chartRef.current
+    if (!chart) return
+    chart.timeScale().setVisibleRange(range)
+  }, [])
+
+  const buildCandleData = (b: Bar): CandlestickData<Time> => ({
+    time: b.time as Time,
+    open: b.open,
+    high: b.high,
+    low: b.low,
+    close: b.close,
+  })
+
+  const buildVolumeData = (b: Bar): HistogramData<Time> => ({
+    time: b.time as Time,
+    value: b.volume,
+    color: b.close >= b.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)',
+  })
 
   const fetchLiveData = useCallback(async (range: string) => {
     if (!instrument) return
@@ -80,21 +115,57 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
     setError('')
     try {
       const tf = timeframe || '1d'
-      const res = await fetch(`/api/data/live?instrument=${instrument}&timeframe=${tf}&range=${range}`)
+      const res = await fetch(`/api/data/live?instrument=${instrument}&timeframe=${tf}&range=${range}`, {
+        cache: 'no-store',
+      })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
 
-      setPrevPrice(lastPrice)
-      setBars(data.bars)
-      setMarkers([])
-      setLastPrice(data.lastPrice)
+      const newBars: Bar[] = data.bars
+      const range2 = saveVisibleRange()
+
+      barsDataRef.current = newBars
+
+      const candle = candleSeriesRef.current
+      if (candle) {
+        candle.setData(newBars.map(buildCandleData))
+      }
+
+      const vol = volumeSeriesRef.current
+      if (vol && showVolume) {
+        vol.setData(newBars.map(buildVolumeData))
+      }
+
+      if (indicatorSeriesRef.current && selectedIndicator !== 'none') {
+        const closes = newBars.map(b => b.close)
+        let values: number[] = []
+        if (selectedIndicator === 'sma') values = computeSMA(closes, indicatorPeriod)
+        else if (selectedIndicator === 'ema') values = computeEMA(closes, indicatorPeriod)
+        else if (selectedIndicator === 'rsi') values = computeRSI(closes, indicatorPeriod)
+
+        indicatorSeriesRef.current.setData(
+          newBars
+            .map((b, i) => ({ time: b.time as Time, value: values[i] }))
+            .filter(d => !isNaN(d.value))
+        )
+      }
+
+      isLiveUpdate.current = true
+      setPrevPrice(prev => {
+        setLastPrice(data.lastPrice)
+        return prev
+      })
       setLastUpdate(new Date().toLocaleTimeString())
+
+      requestAnimationFrame(() => {
+        restoreVisibleRange(range2)
+      })
     } catch (e: any) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [instrument, timeframe, lastPrice])
+  }, [instrument, timeframe, showVolume, selectedIndicator, indicatorPeriod, saveVisibleRange, restoreVisibleRange])
 
   useEffect(() => {
     if (liveMode && instrument) {
@@ -109,14 +180,10 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
     return () => clearInterval(id)
   }, [liveMode, refreshInterval, liveRange, fetchLiveData])
 
+  // Create chart once
   useEffect(() => {
-    if (liveMode) {
-      setBars(initialBars)
-    }
-  }, [initialBars])
-
-  useEffect(() => {
-    if (!containerRef.current || bars.length === 0) return
+    if (!containerRef.current) return
+    if (chartRef.current) return
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
@@ -143,57 +210,7 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
       },
     })
 
-    const candlestick = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
-    })
-
-    candlestick.setData(
-      bars.map((b) => ({
-        time: b.time as Time,
-        open: b.open,
-        high: b.high,
-        low: b.low,
-        close: b.close,
-      }))
-    )
-
-    if (markers.length > 0) {
-      const seriesMarkers: SeriesMarker<Time>[] = markers.map((m) => ({
-        time: m.time as Time,
-        position: m.position,
-        color: m.color,
-        shape: m.shape,
-        text: m.text,
-        size: 1,
-      }))
-      createSeriesMarkers(candlestick, seriesMarkers)
-    }
-
-    candleSeriesRef.current = candlestick
-
-    let volumeSeries: ISeriesApi<'Histogram'> | null = null
-    if (showVolume) {
-      volumeSeries = chart.addSeries(HistogramSeries, {
-        priceFormat: { type: 'volume' },
-        priceScaleId: 'volume',
-      })
-      chart.priceScale('volume').applyOptions({
-        scaleMargins: { top: 0.8, bottom: 0 },
-      })
-      volumeSeries.setData(
-        bars.map((b) => ({
-          time: b.time as Time,
-          value: b.volume,
-          color: b.close >= b.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)',
-        }))
-      )
-      volumeSeriesRef.current = volumeSeries
-    }
+    chartRef.current = chart
 
     const handleResize = () => {
       if (containerRef.current) {
@@ -202,62 +219,126 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
     }
     window.addEventListener('resize', handleResize)
 
-    chartRef.current = chart
-
     return () => {
       window.removeEventListener('resize', handleResize)
       chart.remove()
       chartRef.current = null
       candleSeriesRef.current = null
       volumeSeriesRef.current = null
+      indicatorSeriesRef.current = null
     }
-  }, [bars, markers, showVolume])
+  }, [])
 
+  // Create candle + volume series once, then update data
   useEffect(() => {
     const chart = chartRef.current
-    if (!chart || bars.length === 0 || selectedIndicator === 'none') return
+    if (!chart || initialBars.length === 0) return
 
-    const closes = bars.map((b) => b.close)
-    let values: number[] = []
+    const range = saveVisibleRange()
 
-    if (selectedIndicator === 'sma') {
-      values = computeSMA(closes, indicatorPeriod)
-    } else if (selectedIndicator === 'ema') {
-      values = computeEMA(closes, indicatorPeriod)
-    } else if (selectedIndicator === 'rsi') {
-      values = computeRSI(closes, indicatorPeriod)
+    if (!candleSeriesRef.current) {
+      const candlestick = chart.addSeries(CandlestickSeries, {
+        upColor: '#22c55e',
+        downColor: '#ef4444',
+        borderUpColor: '#22c55e',
+        borderDownColor: '#ef4444',
+        wickUpColor: '#22c55e',
+        wickDownColor: '#ef4444',
+      })
+      candleSeriesRef.current = candlestick
+      candlestick.setData(initialBars.map(buildCandleData))
+    } else if (isInitialMount.current || !isLiveUpdate.current) {
+      candleSeriesRef.current.setData(initialBars.map(buildCandleData))
     }
 
-    if (values.length === 0) return
+    if (initialMarkers.length > 0 && candleSeriesRef.current) {
+      const seriesMarkers: SeriesMarker<Time>[] = initialMarkers.map((m) => ({
+        time: m.time as Time,
+        position: m.position,
+        color: m.color,
+        shape: m.shape,
+        text: m.text,
+        size: 1,
+      }))
+      createSeriesMarkers(candleSeriesRef.current, seriesMarkers)
+    }
+
+    if (showVolume && !volumeSeriesRef.current) {
+      const vol = chart.addSeries(HistogramSeries, {
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'volume',
+      })
+      chart.priceScale('volume').applyOptions({
+        scaleMargins: { top: 0.8, bottom: 0 },
+      })
+      vol.setData(initialBars.map(buildVolumeData))
+      volumeSeriesRef.current = vol
+    } else if (showVolume && volumeSeriesRef.current && !isLiveUpdate.current) {
+      volumeSeriesRef.current.setData(initialBars.map(buildVolumeData))
+    } else if (!showVolume && volumeSeriesRef.current) {
+      chart.removeSeries(volumeSeriesRef.current)
+      volumeSeriesRef.current = null
+    }
+
+    barsDataRef.current = initialBars
+
+    if (!isLiveUpdate.current) {
+      if (isInitialMount.current) {
+        chart.timeScale().fitContent()
+        isInitialMount.current = false
+      } else {
+        restoreVisibleRange(range)
+      }
+    }
+    isLiveUpdate.current = false
+  }, [initialBars, initialMarkers, showVolume, saveVisibleRange, restoreVisibleRange])
+
+  // Update indicator series
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart || barsDataRef.current.length === 0) return
+
+    if (selectedIndicator === 'none') {
+      if (indicatorSeriesRef.current) {
+        chart.removeSeries(indicatorSeriesRef.current)
+        indicatorSeriesRef.current = null
+      }
+      return
+    }
+
+    const closes = barsDataRef.current.map(b => b.close)
+    let values: number[] = []
+    if (selectedIndicator === 'sma') values = computeSMA(closes, indicatorPeriod)
+    else if (selectedIndicator === 'ema') values = computeEMA(closes, indicatorPeriod)
+    else if (selectedIndicator === 'rsi') values = computeRSI(closes, indicatorPeriod)
 
     const color =
-      selectedIndicator === 'rsi'
-        ? '#a855f7'
-        : selectedIndicator === 'ema'
-          ? '#3b82f6'
-          : '#eab308'
+      selectedIndicator === 'rsi' ? '#a855f7' :
+      selectedIndicator === 'ema' ? '#3b82f6' : '#eab308'
 
-    const series = chart.addSeries(LineSeries, {
-      color,
-      lineWidth: 1,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    })
-
-    const data = bars
-      .map((b, i) => ({
-        time: b.time as Time,
-        value: values[i],
-      }))
-      .filter((d) => !isNaN(d.value))
-
-    series.setData(data)
-
-    return () => {
-      chart.removeSeries(series)
+    if (indicatorSeriesRef.current) {
+      indicatorSeriesRef.current.applyOptions({ color })
+      indicatorSeriesRef.current.setData(
+        barsDataRef.current
+          .map((b, i) => ({ time: b.time as Time, value: values[i] }))
+          .filter(d => !isNaN(d.value))
+      )
+    } else {
+      const series = chart.addSeries(LineSeries, {
+        color,
+        lineWidth: 1,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      series.setData(
+        barsDataRef.current
+          .map((b, i) => ({ time: b.time as Time, value: values[i] }))
+          .filter(d => !isNaN(d.value))
+      )
+      indicatorSeriesRef.current = series
     }
-  }, [bars, selectedIndicator, indicatorPeriod])
+  }, [barsDataRef.current, selectedIndicator, indicatorPeriod])
 
   return (
     <div>
@@ -335,8 +416,8 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
           </div>
         )}
 
-        {!liveMode && markers.length > 0 && (
-          <span className="text-xs text-gray-500 ml-auto">{markers.length} trade markers</span>
+        {!liveMode && initialMarkers.length > 0 && (
+          <span className="text-xs text-gray-500 ml-auto">{initialMarkers.length} trade markers</span>
         )}
       </div>
 
