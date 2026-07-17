@@ -26,7 +26,7 @@ export async function runBacktest(payload: {
   end_date: string
   timeframe?: string
 }) {
-  return apiFetch<{ run_id: number; result: any }>('/backtest', {
+  return apiFetch<{ run_id: number; result: any; bars: any[]; markers: any[] }>('/backtest', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

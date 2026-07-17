@@ -12,6 +12,8 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>('builder')
   const [result, setResult] = useState<BacktestResult | null>(null)
   const [strategy, setStrategy] = useState<Strategy | null>(null)
+  const [bars, setBars] = useState<any[]>([])
+  const [markers, setMarkers] = useState<any[]>([])
 
   const tabs: [Tab, string][] = [
     ['builder', 'Strategy Builder'],
@@ -51,14 +53,16 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {tab === 'builder' && (
           <StrategyBuilder
-            onBacktestComplete={(r, s) => {
+            onBacktestComplete={(r, s, b, m) => {
               setResult(r)
               setStrategy(s)
+              setBars(b)
+              setMarkers(m)
               setTab('results')
             }}
           />
         )}
-        {tab === 'results' && <BacktestResults result={result} />}
+        {tab === 'results' && <BacktestResults result={result} bars={bars} markers={markers} />}
         {tab === 'chat' && <ChatCoach result={result} strategy={strategy} />}
       </main>
     </div>

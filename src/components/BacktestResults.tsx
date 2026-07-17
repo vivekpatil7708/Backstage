@@ -2,13 +2,16 @@
 
 import { BacktestResult as BR } from '@/types'
 import EquityChart from './EquityChart'
+import PriceChart from './PriceChart'
 import TradeTable from './TradeTable'
 
 interface Props {
   result: BR | null
+  bars?: any[]
+  markers?: any[]
 }
 
-export default function BacktestResults({ result }: Props) {
+export default function BacktestResults({ result, bars = [], markers = [] }: Props) {
   if (!result) {
     return (
       <div className="card text-center py-16 text-gray-400">
@@ -61,6 +64,13 @@ export default function BacktestResults({ result }: Props) {
         <MetricCard label="Profit Factor" value={result.profit_factor.toFixed(2)} accent={result.profit_factor >= 1} />
         <MetricCard label="Exposure" value={pct(result.exposure_pct)} />
       </div>
+
+      {bars.length > 0 && (
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-400 mb-4">Price Chart with Trade Markers</h3>
+          <PriceChart bars={bars} markers={markers} />
+        </div>
+      )}
 
       <div className="card">
         <h3 className="text-sm font-medium text-gray-400 mb-4">Equity Curve</h3>

@@ -25,7 +25,41 @@ export async function POST(request: NextRequest) {
     }
 
     const result = runBacktest(strategy, bars)
-    return NextResponse.json({ run_id: 0, result })
+
+    const chartBars = bars.map(b => ({
+      time: b.datetime.split("T")[0],
+      open: b.Open,
+      high: b.High,
+      low: b.Low,
+      close: b.Close,
+      volume: b.Volume,
+    }))
+
+    const markers = result.trades.flatMap(t => [
+      {
+        time: t.entry_order.timestamp.split("T")[0],
+        position: t.entry_order.side === "buy" ? "belowBar" as const : "aboveBar" as const,
+        color: t.entry_order.side === "buy" ? "#22c55e" : "#ef4444",
+        shape: t.entry_order.side === "buy" ? "arrowUp" as const : "arrowDown" as const,
+        text: `${t.entry_order.side.toUpperCase()} @ ₹${t.entry_order.price.toFixed(0)}`,
+      },
+      {
+        time: t.exit_order.timestamp.split("T")[0],
+        position: t.exit_order.side === "buy" ? "belowBar" as const : "aboveBar" as const,
+        color: t.net_pnl >= 0 ? "#3b82f6" : "#f97316",
+        shape: t.exit_order.side === "buy" ? "arrowUp" as const : "arrowDown" as const,
+        text: `${t.exit_reason} (${t.net_pnl >= 0 ? '+' : ''}₹${t.net_pnl.toFixed(0)})`,
+      },
+    ])
+
+    markers.sort((a, b) => a.time.localeCompare(b.time))
+
+    return NextResponse.json({
+      run_id: 0,
+      result,
+      bars: chartBars,
+      markers,
+    })
   } catch (e: any) {
     return NextResponse.json({ error: e.message, trace: e.stack }, { status: 400 })
   }
