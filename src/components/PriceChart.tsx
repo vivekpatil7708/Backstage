@@ -157,7 +157,9 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
         setLastPrice(data.lastPrice)
         return prev
       })
-      setPriceChange(data.change || 0)
+      const chg = data.change || (data.lastPrice && data.previousClose ? data.lastPrice - data.previousClose : 0)
+      const chgPct = data.changePercent || (data.lastPrice && data.previousClose ? ((data.lastPrice - data.previousClose) / data.previousClose) * 100 : 0)
+      setPriceChange(chg)
       setMarketState(data.marketState || 'UNKNOWN')
       setLastUpdate(new Date().toLocaleTimeString())
 

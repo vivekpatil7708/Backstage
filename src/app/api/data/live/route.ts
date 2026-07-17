@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       bars: chartBars,
       lastPrice: quote?.price ?? chartBars[chartBars.length - 1]?.close ?? null,
+      previousClose: quote?.price ? chartBars[chartBars.length - 1]?.close ?? null : null,
       change: quote?.change ?? 0,
       changePercent: quote?.changePercent ?? 0,
       marketState: quote?.marketState ?? "UNKNOWN",
