@@ -1,4 +1,4 @@
-import type { OHLCVBar } from "./types"
+import type { OHLCVBar, Timeframe } from "./types"
 
 const BASE_PRICES: Record<string, number> = {
   NIFTY: 18000, BANKNIFTY: 40000, RELIANCE: 2500, TCS: 3500, INFY: 1500,
@@ -9,6 +9,29 @@ const INSTRUMENTS = [
   "NIFTY", "BANKNIFTY", "RELIANCE", "TCS", "INFY",
   "HDFCBANK", "ICICIBANK", "SBIN", "ITC", "TATAMOTORS",
 ]
+
+const YAHOO_SYMBOLS: Record<string, string> = {
+  NIFTY: "^NSEI",
+  BANKNIFTY: "^NSEBANK",
+  RELIANCE: "RELIANCE.NS",
+  TCS: "TCS.NS",
+  INFY: "INFY.NS",
+  HDFCBANK: "HDFCBANK.NS",
+  ICICIBANK: "ICICIBANK.NS",
+  SBIN: "SBIN.NS",
+  ITC: "ITC.NS",
+  TATAMOTORS: "TATAMOTORS.NS",
+}
+
+const TIMEFRAME_TO_YAHOO: Record<string, string> = {
+  "1m": "1m",
+  "5m": "5m",
+  "15m": "15m",
+  "30m": "30m",
+  "1h": "1h",
+  "1d": "1d",
+  "1w": "1wk",
+}
 
 function seededRandom(seed: number): () => number {
   let s = seed
@@ -39,6 +62,76 @@ function getBusinessDays(startDate: string, endDate: string): string[] {
     cur.setDate(cur.getDate() + 1)
   }
   return dates
+}
+
+export async function fetchYahooData(
+  instrument: string,
+  startDate: string,
+  endDate: string,
+  timeframe: string = "1d",
+): Promise<OHLCVBar[]> {
+  const symbol = YAHOO_SYMBOLS[instrument.toUpperCase()]
+  if (!symbol) {
+    throw new Error(`Unknown instrument: ${instrument}. Available: ${INSTRUMENTS.join(", ")}`)
+  }
+
+  const interval = TIMEFRAME_TO_YAHOO[timeframe] || "1d"
+  const period1 = Math.floor(new Date(startDate).getTime() / 1000)
+  const period2 = Math.floor(new Date(endDate).getTime() / 1000)
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=${interval}`
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+    next: { revalidate: 3600 },
+  })
+
+  if (!res.ok) {
+    throw new Error(`Yahoo Finance API error: ${res.status} ${res.statusText}`)
+  }
+
+  const data = await res.json()
+  const chart = data.chart?.result?.[0]
+  if (!chart) {
+    throw new Error(`No data returned for ${instrument}`)
+  }
+
+  const timestamps: number[] = chart.timestamp || []
+  const quote = chart.indicators?.quote?.[0]
+  if (!quote || !quote.close) {
+    throw new Error(`No OHLCV data for ${instrument}`)
+  }
+
+  const bars: OHLCVBar[] = []
+  for (let i = 0; i < timestamps.length; i++) {
+    const close = quote.close[i]
+    const open = quote.open[i]
+    const high = quote.high[i]
+    const low = quote.low[i]
+    const volume = quote.volume[i]
+
+    if (close == null || open == null || high == null || low == null) continue
+
+    const dt = new Date(timestamps[i] * 1000)
+    const dateStr = dt.toISOString().split("T")[0]
+
+    bars.push({
+      datetime: dateStr + "T09:15:00",
+      Open: Math.round(open * 100) / 100,
+      High: Math.round(high * 100) / 100,
+      Low: Math.round(low * 100) / 100,
+      Close: Math.round(close * 100) / 100,
+      Volume: volume || 0,
+    })
+  }
+
+  if (bars.length === 0) {
+    throw new Error(`No valid OHLCV bars for ${instrument} in the given date range`)
+  }
+
+  return bars
 }
 
 export function generateSyntheticData(
@@ -93,5 +186,5 @@ export function listInstruments(): string[] {
 }
 
 export function listDataSources(): string[] {
-  return ["synthetic", "csv"]
+  return ["yahoo", "synthetic"]
 }

@@ -24,6 +24,7 @@ export async function runBacktest(payload: {
   instrument: string
   start_date: string
   end_date: string
+  timeframe?: string
 }) {
   return apiFetch<{ run_id: number; result: any }>('/backtest', {
     method: 'POST',

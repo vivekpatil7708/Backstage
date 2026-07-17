@@ -20,7 +20,7 @@ export default function StrategyBuilder({ onBacktestComplete }: Props) {
   const [startDate, setStartDate] = useState('2023-01-01')
   const [endDate, setEndDate] = useState('2024-12-31')
   const [capital, setCapital] = useState(100000)
-  const [dataSource, setDataSource] = useState('synthetic')
+  const [dataSource, setDataSource] = useState('yahoo')
   const [stopLoss, setStopLoss] = useState(2)
   const [takeProfit, setTakeProfit] = useState(4)
   const [indicator, setIndicator] = useState('rsi')
@@ -94,6 +94,7 @@ export default function StrategyBuilder({ onBacktestComplete }: Props) {
         instrument: strategy.entry_rules[0]?.instrument || instrument,
         start_date: strategy.start_date || startDate,
         end_date: strategy.end_date || endDate,
+        timeframe: strategy.timeframe || timeframe,
       })
       onBacktestComplete(res.result)
     } catch (e: any) {
@@ -210,8 +211,8 @@ export default function StrategyBuilder({ onBacktestComplete }: Props) {
                   onChange={(e) => setDataSource(e.target.value)}
                   className="w-full"
                 >
+                  <option value="yahoo">Yahoo Finance (Real)</option>
                   <option value="synthetic">Synthetic (Demo)</option>
-                  <option value="csv">CSV File</option>
                 </select>
               </div>
               <div>
