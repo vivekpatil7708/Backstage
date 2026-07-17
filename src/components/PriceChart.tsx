@@ -77,6 +77,8 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
   const [lastUpdate, setLastUpdate] = useState<string>('')
   const [lastPrice, setLastPrice] = useState<number | null>(null)
   const [prevPrice, setPrevPrice] = useState<number | null>(null)
+  const [priceChange, setPriceChange] = useState(0)
+  const [marketState, setMarketState] = useState('UNKNOWN')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -155,6 +157,8 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
         setLastPrice(data.lastPrice)
         return prev
       })
+      setPriceChange(data.change || 0)
+      setMarketState(data.marketState || 'UNKNOWN')
       setLastUpdate(new Date().toLocaleTimeString())
 
       requestAnimationFrame(() => {
@@ -394,23 +398,33 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
 
         {liveMode && lastPrice !== null && (
           <div className="flex items-center gap-2 ml-auto">
+            {marketState && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                marketState === 'REGULAR' ? 'bg-green-900/30 text-green-400' :
+                marketState === 'PRE' ? 'bg-yellow-900/30 text-yellow-400' :
+                marketState === 'POST' ? 'bg-orange-900/30 text-orange-400' :
+                'bg-gray-800 text-gray-500'
+              }`}>
+                {marketState === 'REGULAR' ? 'LIVE' :
+                 marketState === 'PRE' ? 'PRE' :
+                 marketState === 'POST' ? 'POST' : marketState}
+              </span>
+            )}
             <span className="text-xs text-gray-400">LTP</span>
             <span className={`text-sm font-mono font-bold ${
-              prevPrice !== null
-                ? lastPrice > prevPrice
-                  ? 'text-green-400'
-                  : lastPrice < prevPrice
-                    ? 'text-red-400'
-                    : 'text-gray-100'
-                : 'text-gray-100'
+              priceChange > 0
+                ? 'text-green-400'
+                : priceChange < 0
+                  ? 'text-red-400'
+                  : 'text-gray-100'
             }`}>
               ₹{lastPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
-            {prevPrice !== null && lastPrice !== prevPrice && (
-              <span className={`text-[10px] ${
-                lastPrice > prevPrice ? 'text-green-400' : 'text-red-400'
+            {priceChange !== 0 && (
+              <span className={`text-[10px] font-mono ${
+                priceChange > 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {lastPrice > prevPrice ? '▲' : '▼'} {Math.abs(lastPrice - prevPrice).toFixed(2)}
+                {priceChange > 0 ? '▲' : '▼'} {Math.abs(priceChange).toFixed(2)} ({Math.abs(priceChange / lastPrice * 100).toFixed(2)}%)
               </span>
             )}
           </div>

@@ -181,6 +181,29 @@ export function generateSyntheticData(
   return bars
 }
 
+export async function fetchYahooQuote(instrument: string): Promise<{ price: number; change: number; changePercent: number; marketState: string }> {
+  const symbol = YAHOO_SYMBOLS[instrument.toUpperCase()]
+  if (!symbol) throw new Error(`Unknown instrument: ${instrument}`)
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`Yahoo quote error: ${res.status}`)
+
+  const data = await res.json()
+  const meta = data.chart?.result?.[0]?.meta
+  if (!meta) throw new Error(`No quote data for ${instrument}`)
+
+  return {
+    price: meta.regularMarketPrice ?? 0,
+    change: meta.regularMarketChange ?? 0,
+    changePercent: meta.regularMarketChangePercent ?? 0,
+    marketState: meta.marketState ?? "UNKNOWN",
+  }
+}
+
 export function listInstruments(): string[] {
   return [...INSTRUMENTS]
 }

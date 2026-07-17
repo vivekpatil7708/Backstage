@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { fetchYahooData } from "@/lib/data"
+import { fetchYahooData, fetchYahooQuote } from "@/lib/data"
 
 export const dynamic = "force-dynamic"
 
@@ -29,7 +29,10 @@ export async function GET(request: NextRequest) {
     const startDate = start.toISOString().split("T")[0]
     const endDate = end.toISOString().split("T")[0]
 
-    const bars = await fetchYahooData(instrument, startDate, endDate, timeframe)
+    const [bars, quote] = await Promise.all([
+      fetchYahooData(instrument, startDate, endDate, timeframe),
+      fetchYahooQuote(instrument).catch(() => null),
+    ])
 
     const chartBars = bars.map(b => ({
       time: b.datetime.split("T")[0],
@@ -40,12 +43,13 @@ export async function GET(request: NextRequest) {
       volume: b.Volume,
     }))
 
-    const lastBar = chartBars[chartBars.length - 1]
-
     return NextResponse.json({
       bars: chartBars,
-      lastPrice: lastBar?.close ?? null,
-      lastTime: lastBar?.time ?? null,
+      lastPrice: quote?.price ?? chartBars[chartBars.length - 1]?.close ?? null,
+      change: quote?.change ?? 0,
+      changePercent: quote?.changePercent ?? 0,
+      marketState: quote?.marketState ?? "UNKNOWN",
+      lastTime: chartBars[chartBars.length - 1]?.time ?? null,
       instrument,
       timeframe,
       range,
