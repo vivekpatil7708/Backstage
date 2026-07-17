@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { chat } from '@/lib/api'
-import { ChatMessage } from '@/types'
+import { ChatMessage, BacktestResult, Strategy } from '@/types'
 
 const SUGGESTIONS = [
   'How do I build a momentum strategy for NIFTY?',
@@ -13,12 +13,18 @@ const SUGGESTIONS = [
   'What is the best indicator for options buying?',
 ]
 
-export default function ChatCoach() {
+interface Props {
+  result: BacktestResult | null
+  strategy: Strategy | null
+}
+
+export default function ChatCoach({ result, strategy }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content:
-        'Welcome to the Strategy Coach! I can help you design trading strategies, analyze backtest results, and improve your approach. What would you like to work on?',
+      content: result
+        ? `I see your backtest results for **${result.strategy_name}**. Let me know what you'd like to improve or ask me anything about your strategy.`
+        : 'Welcome to the Strategy Coach! I can help you design trading strategies, analyze backtest results, and improve your approach. What would you like to work on?',
     },
   ])
   const [input, setInput] = useState('')
@@ -39,7 +45,13 @@ export default function ChatCoach() {
 
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }))
-      const res = await chat(msg, history)
+      const context: any = {}
+      if (strategy) context.strategy = strategy
+      if (result) {
+        const { equity_curve, trades, monthly_returns, ...metrics } = result
+        context.result = metrics
+      }
+      const res = await chat(msg, history, context)
       setMessages((prev) => [...prev, { role: 'assistant', content: res.response }])
     } catch (e: any) {
       setMessages((prev) => [
@@ -60,7 +72,7 @@ export default function ChatCoach() {
             className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[70%] rounded-xl px-4 py-3 text-sm ${
+              className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${
                 m.role === 'user'
                   ? 'bg-blue-600 text-white'
                   : 'bg-[#11111b] text-gray-200 border border-[#2a2a3a]'

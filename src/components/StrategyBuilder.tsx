@@ -5,7 +5,7 @@ import { parseStrategy, runBacktest } from '@/lib/api'
 import { Strategy, BacktestResult } from '@/types'
 
 interface Props {
-  onBacktestComplete: (result: BacktestResult) => void
+  onBacktestComplete: (result: BacktestResult, strategy: Strategy) => void
 }
 
 export default function StrategyBuilder({ onBacktestComplete }: Props) {
@@ -96,7 +96,7 @@ export default function StrategyBuilder({ onBacktestComplete }: Props) {
         end_date: strategy.end_date || endDate,
         timeframe: strategy.timeframe || timeframe,
       })
-      onBacktestComplete(res.result)
+      onBacktestComplete(res.result, strategy)
     } catch (e: any) {
       setError(e.message)
     } finally {

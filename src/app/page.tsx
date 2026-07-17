@@ -4,13 +4,14 @@ import { useState } from 'react'
 import StrategyBuilder from '@/components/StrategyBuilder'
 import BacktestResults from '@/components/BacktestResults'
 import ChatCoach from '@/components/ChatCoach'
-import { BacktestResult } from '@/types'
+import { BacktestResult, Strategy } from '@/types'
 
 type Tab = 'builder' | 'results' | 'chat'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('builder')
   const [result, setResult] = useState<BacktestResult | null>(null)
+  const [strategy, setStrategy] = useState<Strategy | null>(null)
 
   const tabs: [Tab, string][] = [
     ['builder', 'Strategy Builder'],
@@ -50,14 +51,15 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {tab === 'builder' && (
           <StrategyBuilder
-            onBacktestComplete={(r) => {
+            onBacktestComplete={(r, s) => {
               setResult(r)
+              setStrategy(s)
               setTab('results')
             }}
           />
         )}
         {tab === 'results' && <BacktestResults result={result} />}
-        {tab === 'chat' && <ChatCoach />}
+        {tab === 'chat' && <ChatCoach result={result} strategy={strategy} />}
       </main>
     </div>
   )

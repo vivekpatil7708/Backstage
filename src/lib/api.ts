@@ -32,10 +32,10 @@ export async function runBacktest(payload: {
   })
 }
 
-export async function chat(message: string, history: any[]) {
+export async function chat(message: string, history: any[], context?: { strategy?: any; result?: any }) {
   return apiFetch<{ response: string }>('/chat', {
     method: 'POST',
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, context }),
   })
 }
 
