@@ -124,13 +124,23 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
       if (data.error) throw new Error(data.error)
 
       const newBars: Bar[] = data.bars
-      const range2 = saveVisibleRange()
+      const savedRange = saveVisibleRange()
+
+      if (data.lastPrice && newBars.length > 0) {
+        const last = newBars[newBars.length - 1]
+        last.close = data.lastPrice
+        if (data.lastPrice > last.high) last.high = data.lastPrice
+        if (data.lastPrice < last.low) last.low = data.lastPrice
+      }
 
       barsDataRef.current = newBars
 
       const candle = candleSeriesRef.current
       if (candle) {
-        candle.setData(newBars.map(buildCandleData))
+        const lastBar = newBars[newBars.length - 1]
+        const allButLast = newBars.slice(0, -1)
+        candle.setData(allButLast.map(buildCandleData))
+        if (lastBar) candle.update(buildCandleData(lastBar))
       }
 
       const vol = volumeSeriesRef.current
@@ -164,7 +174,7 @@ export default function PriceChart({ bars: initialBars, markers: initialMarkers,
       setLastUpdate(new Date().toLocaleTimeString())
 
       requestAnimationFrame(() => {
-        restoreVisibleRange(range2)
+        restoreVisibleRange(savedRange)
       })
     } catch (e: any) {
       setError(e.message)
