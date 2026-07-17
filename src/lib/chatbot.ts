@@ -444,42 +444,95 @@ export async function chatWithCoach(
   history: { role: string; content: string }[] = [],
   context: ChatContext = {},
 ): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY
+  const geminiKey = process.env.GEMINI_API_KEY
+  const openaiKey = process.env.OPENAI_API_KEY
 
-  if (!apiKey) {
-    return fallbackResponse(userMessage, context)
+  if (geminiKey) {
+    try {
+      return await chatGemini(userMessage, history, context, geminiKey)
+    } catch { /* fall through */ }
   }
 
-  try {
-    const contextBlock = buildContextBlock(context)
-    const systemContent = SYSTEM_PROMPT + (contextBlock ? `\n\nCONTEXT:\n${contextBlock}` : "")
+  if (openaiKey) {
+    try {
+      return await chatOpenAI(userMessage, history, context, openaiKey)
+    } catch { /* fall through */ }
+  }
 
-    const messages = [
-      { role: "system", content: systemContent },
-      ...history.slice(-10),
-      { role: "user", content: userMessage },
-    ]
+  return fallbackResponse(userMessage, context)
+}
 
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        messages,
-        temperature: 0.5,
-        max_tokens: 2000,
-      }),
+async function chatGemini(
+  userMessage: string,
+  history: { role: string; content: string }[],
+  context: ChatContext,
+  apiKey: string,
+): Promise<string> {
+  const contextBlock = buildContextBlock(context)
+  const systemText = SYSTEM_PROMPT + (contextBlock ? `\n\nCONTEXT:\n${contextBlock}` : "")
+
+  const contents: { role: string; parts: { text: string }[] }[] = []
+  for (const msg of history.slice(-10)) {
+    contents.push({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
     })
-
-    if (!res.ok) return fallbackResponse(userMessage, context)
-    const data = await res.json()
-    return data.choices?.[0]?.message?.content || fallbackResponse(userMessage, context)
-  } catch {
-    return fallbackResponse(userMessage, context)
   }
+  contents.push({ role: "user", parts: [{ text: userMessage }] })
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemText }] },
+        contents,
+        generationConfig: {
+          temperature: 0.5,
+          maxOutputTokens: 2000,
+        },
+      }),
+    },
+  )
+
+  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`)
+  const data = await res.json()
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || fallbackResponse(userMessage, context)
+}
+
+async function chatOpenAI(
+  userMessage: string,
+  history: { role: string; content: string }[],
+  context: ChatContext,
+  apiKey: string,
+): Promise<string> {
+  const contextBlock = buildContextBlock(context)
+  const systemContent = SYSTEM_PROMPT + (contextBlock ? `\n\nCONTEXT:\n${contextBlock}` : "")
+
+  const messages = [
+    { role: "system", content: systemContent },
+    ...history.slice(-10),
+    { role: "user", content: userMessage },
+  ]
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      messages,
+      temperature: 0.5,
+      max_tokens: 2000,
+    }),
+  })
+
+  if (!res.ok) throw new Error(`OpenAI API error: ${res.status}`)
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content || fallbackResponse(userMessage, context)
 }
 
 export { SYSTEM_PROMPT }
